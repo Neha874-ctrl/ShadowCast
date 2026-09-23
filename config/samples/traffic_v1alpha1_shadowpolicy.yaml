@@ -1,0 +1,9 @@
+apiVersion: traffic.shadowcast.io/v1alpha1
+kind: ShadowPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: shadowcast
+    app.kubernetes.io/managed-by: kustomize
+  name: shadowpolicy-sample
+spec:
+  # TODO(user): Add fields here
