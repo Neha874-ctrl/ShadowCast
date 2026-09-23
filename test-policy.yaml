@@ -1,0 +1,12 @@
+apiVersion: traffic.shadowcast.io/v1alpha1
+kind: ShadowPolicy
+metadata:
+  name: checkout-shadow-test
+  namespace: default
+spec:
+  sourceService: checkout-prod
+  targetService: checkout-canary
+  mirrorPercentage: 25
+  ignoredFields:
+    - "timestamp"
+    - "request_id"

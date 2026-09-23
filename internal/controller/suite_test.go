@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	trafficv1alpha1 "github.com/yourusername/shadowcast/api/v1alpha1"
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

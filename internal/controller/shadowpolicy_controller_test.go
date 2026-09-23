@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	trafficv1alpha1 "github.com/yourusername/shadowcast/api/v1alpha1"
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 )
 
 var _ = Describe("ShadowPolicy Controller", func() {

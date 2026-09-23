@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	trafficv1alpha1 "github.com/yourusername/shadowcast/api/v1alpha1"
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 )
 
 // ShadowPolicyReconciler reconciles a ShadowPolicy object

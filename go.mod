@@ -1,4 +1,4 @@
-module github.com/yourusername/shadowcast
+module github.com/neha874-ctrl/shadowcast
 
 go 1.26.0
 

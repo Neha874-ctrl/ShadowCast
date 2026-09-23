@@ -7,7 +7,7 @@ domain: shadowcast.io
 layout:
 - go.kubebuilder.io/v4
 projectName: shadowcast
-repo: github.com/yourusername/shadowcast
+repo: github.com/neha874-ctrl/shadowcast
 resources:
 - api:
     crdVersion: v1
@@ -16,6 +16,6 @@ resources:
   domain: shadowcast.io
   group: traffic
   kind: ShadowPolicy
-  path: github.com/yourusername/shadowcast/api/v1alpha1
+  path: github.com/neha874-ctrl/shadowcast/api/v1alpha1
   version: v1alpha1
 version: "3"

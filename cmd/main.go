@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	trafficv1alpha1 "github.com/yourusername/shadowcast/api/v1alpha1"
-	"github.com/yourusername/shadowcast/internal/controller"
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
+	"github.com/neha874-ctrl/shadowcast/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
