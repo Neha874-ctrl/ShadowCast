@@ -18,13 +18,13 @@ package controller
 
 import (
 	"context"
+
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 )
 
 // ShadowPolicyReconciler reconciles a ShadowPolicy object
@@ -37,40 +37,33 @@ type ShadowPolicyReconciler struct {
 // +kubebuilder:rbac:groups=traffic.shadowcast.io,resources=shadowpolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=traffic.shadowcast.io,resources=shadowpolicies/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ShadowPolicy object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.25.0/pkg/reconcile
+// Reconcile reads the state of the cluster for a ShadowPolicy object and makes changes as necessary.
 func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
 	var policy trafficv1alpha1.ShadowPolicy
 	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("ShadoePolicy resource deleted", "name", req.NamespacedName)
+			logger.Info("ShadowPolicy resource deleted", "name", req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch ShadowPolicy")
 		return ctrl.Result{}, err
 	}
+
 	logger.Info("Reconciling ShadowPolicy",
 		"source", policy.Spec.SourceService,
 		"target", policy.Spec.TargetService,
 		"mirrorPercentage", policy.Spec.MirrorPercentage,
 	)
+
 	if !policy.Status.Active {
 		policy.Status.Active = true
 		if err := r.Status().Update(ctx, &policy); err != nil {
-			logger.Error(err, "failed to update shadowpolicy status")
+			logger.Error(err, "Failed to update ShadowPolicy status")
 			return ctrl.Result{}, err
 		}
-		logger.Info("Update shadow policy status to active", "name", policy.Name)
+		logger.Info("Updated ShadowPolicy status to Active", "name", policy.Name)
 	}
 
 	return ctrl.Result{}, nil
