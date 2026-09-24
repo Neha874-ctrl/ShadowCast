@@ -18,7 +18,7 @@ package controller
 
 import (
 	"context"
-
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,9 +47,31 @@ type ShadowPolicyReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.25.0/pkg/reconcile
 func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// TODO(user): your logic here
+	var policy trafficv1alpha1.ShadowPolicy
+	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("ShadoePolicy resource deleted", "name", req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "Failed to fetch ShadowPolicy")
+		return ctrl.Result{}, err
+	}
+	logger.Info("Reconciling ShadowPolicy",
+		"source", policy.Spec.SourceService,
+		"target", policy.Spec.TargetService,
+		"mirrorPercentage", policy.Spec.MirrorPercentage,
+	)
+	if !policy.Status.Active {
+		policy.Status.Active = true
+		if err := r.Status().Update(ctx, &policy); err != nil {
+			logger.Error(err, "failed to update shadowpolicy status")
+			return ctrl.Result{}, err
+		}
+		logger.Info("Update shadow policy status to active", "name", policy.Name)
+	}
 
 	return ctrl.Result{}, nil
 }
