@@ -18,26 +18,32 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
+	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
+	"github.com/neha874-ctrl/shadowcast/internal/xds"
 )
 
 // ShadowPolicyReconciler reconciles a ShadowPolicy object
 type ShadowPolicyReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme        *runtime.Scheme
+	SnapshotCache cachev3.SnapshotCache
 }
 
 // +kubebuilder:rbac:groups=traffic.shadowcast.io,resources=shadowpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=traffic.shadowcast.io,resources=shadowpolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=traffic.shadowcast.io,resources=shadowpolicies/finalizers,verbs=update
 
-// Reconcile reads the state of the cluster for a ShadowPolicy object and makes changes as necessary.
+// Reconcile handles ShadowPolicy changes and updates Envoy xDS cache.
 func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
@@ -51,12 +57,29 @@ func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Reconciling ShadowPolicy",
+	logger.Info("Reconciling ShadowPolicy for xDS",
 		"source", policy.Spec.SourceService,
 		"target", policy.Spec.TargetService,
 		"mirrorPercentage", policy.Spec.MirrorPercentage,
 	)
 
+	// Build Envoy xDS Snapshot
+	version := fmt.Sprintf("%d", time.Now().UnixNano())
+	snapshot, err := xds.BuildSnapshot(version, &policy)
+	if err != nil {
+		logger.Error(err, "Failed to build xDS snapshot")
+		return ctrl.Result{}, err
+	}
+
+	// Update xDS cache for Envoy node group "shadowcast-envoy"
+	nodeID := "shadowcast-envoy"
+	if err := r.SnapshotCache.SetSnapshot(ctx, nodeID, snapshot); err != nil {
+		logger.Error(err, "Failed to update xDS snapshot cache")
+		return ctrl.Result{}, err
+	}
+	logger.Info("Successfully updated Envoy xDS snapshot", "nodeID", nodeID, "version", version)
+
+	// Update CRD Status
 	if !policy.Status.Active {
 		policy.Status.Active = true
 		if err := r.Status().Update(ctx, &policy); err != nil {
