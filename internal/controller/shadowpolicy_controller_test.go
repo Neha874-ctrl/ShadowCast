@@ -19,13 +19,13 @@ package controller
 import (
 	"context"
 
+	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 )
@@ -54,34 +54,39 @@ var _ = Describe("ShadowPolicy Controller", func() {
 						Name:      resourceName,
 						Namespace: resourceNamespace,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: trafficv1alpha1.ShadowPolicySpec{
+						SourceService:    "order-service",
+						TargetService:    "shadow-service",
+						MirrorPercentage: 10,
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &trafficv1alpha1.ShadowPolicy{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance ShadowPolicy")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			if err == nil {
+				By("Cleanup the specific resource instance ShadowPolicy")
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			}
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
+			snapshotCache := cachev3.NewSnapshotCache(false, cachev3.IDHash{}, nil)
+
 			controllerReconciler := &ShadowPolicyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:        k8sClient,
+				Scheme:        k8sClient.Scheme(),
+				SnapshotCache: snapshotCache,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})
 	})
 })
