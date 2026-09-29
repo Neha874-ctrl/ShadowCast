@@ -8,19 +8,25 @@ import (
 	"strings"
 	"time"
 
+	// Standard Protobuf
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	// Envoy v3 Configs
 	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	routerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
+	// Control Plane Cache & Types
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
-	"google.golang.org/protobuf/types/known/durationpb"
-	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
 )
@@ -33,11 +39,21 @@ func BuildSnapshot(version string, policy *trafficv1alpha1.ShadowPolicy) (cachev
 	primaryCluster := makeCluster(policy.Spec.SourceService, primaryHost, primaryPort, primaryDiscType)
 	shadowCluster := makeCluster(policy.Spec.TargetService, shadowHost, shadowPort, shadowDiscType)
 
-	routeConfig := makeRouteConfig("shadowcast_routes", policy)
+	routeName := "local_route"
+	routeConfig := makeRouteConfig(routeName, policy)
+
+	ingressListener, err := makeHTTPListener("ingress_listener", 10000, routeName, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("[xDS Debug] Successfully created ingress listener: %s on port 10000\n", ingressListener.GetName())
 
 	resources := map[resource.Type][]types.Resource{
-		resource.ClusterType: {primaryCluster, shadowCluster},
-		resource.RouteType:   {routeConfig},
+		resource.EndpointType: {},
+		resource.ClusterType:  {primaryCluster, shadowCluster},
+		resource.RouteType:    {routeConfig}, // CRITICAL: Must be populated to satisfy xDS dependencies
+		resource.ListenerType: {ingressListener},
 	}
 
 	return cachev3.NewSnapshot(version, resources)
@@ -162,49 +178,39 @@ func makeCluster(clusterName, host string, port uint32, discoveryType cluster.Cl
 	return c
 }
 
-func makeRouteConfig(routeName string, policy *trafficv1alpha1.ShadowPolicy) *route.RouteConfiguration {
-	mirrorPercentage := float64(policy.Spec.MirrorPercentage)
+func makeRouteConfig(routeName string, policies ...*trafficv1alpha1.ShadowPolicy) *route.RouteConfiguration {
+	sourceService := "order-service"
+	targetService := "shadow-service"
+	var mirrorPercentage float64 = 100
+
+	var policy *trafficv1alpha1.ShadowPolicy
+	if len(policies) > 0 && policies[0] != nil {
+		policy = policies[0]
+		if policy.Spec.SourceService != "" {
+			sourceService = policy.Spec.SourceService
+		}
+		if policy.Spec.TargetService != "" {
+			targetService = policy.Spec.TargetService
+		}
+		if policy.Spec.MirrorPercentage > 0 {
+			mirrorPercentage = float64(policy.Spec.MirrorPercentage)
+		}
+	}
+
+	mirrorPolicy := &route.RouteAction_RequestMirrorPolicy{
+		Cluster: targetService,
+	}
+	if mirrorPercentage < 100 {
+		mirrorPolicy.RuntimeFraction = &core.RuntimeFractionalPercent{
+			DefaultValue: &typev3.FractionalPercent{
+				Numerator:   uint32(mirrorPercentage * 10000),
+				Denominator: typev3.FractionalPercent_MILLION,
+			},
+		}
+	}
 
 	return &route.RouteConfiguration{
-		Name: routeName,
-		VirtualHosts: []*route.VirtualHost{
-			{
-				Name:    "shadowcast_vhost",
-				Domains: []string{"*"},
-				Routes: []*route.Route{
-					{
-						Match: &route.RouteMatch{
-							PathSpecifier: &route.RouteMatch_Prefix{Prefix: "/"},
-						},
-						Action: &route.Route_Route{
-							Route: &route.RouteAction{
-								ClusterSpecifier: &route.RouteAction_Cluster{
-									Cluster: policy.Spec.SourceService,
-								},
-								RequestMirrorPolicies: []*route.RouteAction_RequestMirrorPolicy{
-									{
-										Cluster: policy.Spec.TargetService,
-										RuntimeFraction: &core.RuntimeFractionalPercent{
-											DefaultValue: &typev3.FractionalPercent{
-												Numerator:   uint32(mirrorPercentage * 10000),
-												Denominator: typev3.FractionalPercent_MILLION,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func makeHTTPListener(listenerName string, port uint32) (*listener.Listener, error) {
-	// 1. Define the HTTP Routing with Shadowing
-	routeConfig := &route.RouteConfiguration{
-		Name: "local_route",
+		Name: routeName, // e.g., "local_route"
 		VirtualHosts: []*route.VirtualHost{
 			{
 				Name:    "backend_service",
@@ -219,13 +225,10 @@ func makeHTTPListener(listenerName string, port uint32) (*listener.Listener, err
 						Action: &route.Route_Route{
 							Route: &route.RouteAction{
 								ClusterSpecifier: &route.RouteAction_Cluster{
-									Cluster: "order-service",
+									Cluster: sourceService,
 								},
-								// Shadow/mirror traffic to shadow-service
 								RequestMirrorPolicies: []*route.RouteAction_RequestMirrorPolicy{
-									{
-										Cluster: "shadow-service",
-									},
+									mirrorPolicy,
 								},
 							},
 						},
@@ -234,27 +237,35 @@ func makeHTTPListener(listenerName string, port uint32) (*listener.Listener, err
 			},
 		},
 	}
+}
 
-	// 2. Wrap in HTTP Connection Manager Filter
+func makeHTTPListener(listenerName string, port uint32, routeName string, policies ...*trafficv1alpha1.ShadowPolicy) (*listener.Listener, error) {
+	routerConfig, err := anypb.New(&routerv3.Router{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal router config: %w", err)
+	}
+
 	manager := &hcm.HttpConnectionManager{
 		CodecType:  hcm.HttpConnectionManager_AUTO,
 		StatPrefix: "ingress_http",
 		RouteSpecifier: &hcm.HttpConnectionManager_RouteConfig{
-			RouteConfig: routeConfig,
+			RouteConfig: makeRouteConfig(routeName, policies...), // Inline route specification avoids RDS timeouts
 		},
 		HttpFilters: []*hcm.HttpFilter{
 			{
 				Name: wellknown.Router,
+				ConfigType: &hcm.HttpFilter_TypedConfig{
+					TypedConfig: routerConfig,
+				},
 			},
 		},
 	}
 
 	pbst, err := anypb.New(manager)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal http connection manager: %w", err)
 	}
 
-	// 3. Create Listener on 0.0.0.0:10000
 	return &listener.Listener{
 		Name: listenerName,
 		Address: &core.Address{
@@ -263,7 +274,7 @@ func makeHTTPListener(listenerName string, port uint32) (*listener.Listener, err
 					Protocol: core.SocketAddress_TCP,
 					Address:  "0.0.0.0",
 					PortSpecifier: &core.SocketAddress_PortValue{
-						PortValue: port, // 10000
+						PortValue: port,
 					},
 				},
 			},

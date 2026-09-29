@@ -6,7 +6,11 @@ import (
 	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
@@ -63,6 +67,54 @@ func TestBuildSnapshot_K8sMode(t *testing.T) {
 	if shadowAddr.GetPortValue() != 8080 {
 		t.Errorf("expected port 8080, got %d", shadowAddr.GetPortValue())
 	}
+
+	// Verify RouteType in snapshot
+	routes := snapshot.GetResources(resource.RouteType)
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route config, got %d", len(routes))
+	}
+	routeCfg, ok := routes["local_route"].(*route.RouteConfiguration)
+	if !ok {
+		t.Fatalf("expected route config with name local_route")
+	}
+	if len(routeCfg.VirtualHosts) == 0 {
+		t.Fatalf("expected at least 1 virtual host")
+	}
+
+	// Verify ListenerType in snapshot
+	listeners := snapshot.GetResources(resource.ListenerType)
+	if len(listeners) != 1 {
+		t.Fatalf("expected 1 listener, got %d", len(listeners))
+	}
+	ingress, ok := listeners["ingress_listener"].(*listener.Listener)
+	if !ok {
+		t.Fatalf("expected listener with name ingress_listener")
+	}
+	sockAddr := ingress.Address.Address.(*core.Address_SocketAddress).SocketAddress
+	if sockAddr.GetPortValue() != 10000 {
+		t.Errorf("expected listener port 10000, got %d", sockAddr.GetPortValue())
+	}
+	if sockAddr.Address != "0.0.0.0" {
+		t.Errorf("expected listener address 0.0.0.0, got %s", sockAddr.Address)
+	}
+
+	// Verify HttpConnectionManager filter and inline RouteConfig
+	filter := ingress.FilterChains[0].Filters[0]
+	if filter.Name != wellknown.HTTPConnectionManager {
+		t.Errorf("expected filter name %s, got %s", wellknown.HTTPConnectionManager, filter.Name)
+	}
+	typedCfg := filter.ConfigType.(*listener.Filter_TypedConfig).TypedConfig
+	var hcmConfig hcm.HttpConnectionManager
+	if err := typedCfg.UnmarshalTo(&hcmConfig); err != nil {
+		t.Fatalf("failed to unmarshal HCM config: %v", err)
+	}
+	inlineRoute := hcmConfig.GetRouteConfig()
+	if inlineRoute == nil {
+		t.Fatalf("expected inline RouteConfig in HCM, got nil (may be using RDS)")
+	}
+	if inlineRoute.Name != "local_route" {
+		t.Errorf("expected inline route name local_route, got %s", inlineRoute.Name)
+	}
 }
 
 func TestBuildSnapshot_HostMode(t *testing.T) {
@@ -107,5 +159,20 @@ func TestBuildSnapshot_HostMode(t *testing.T) {
 	}
 	if shadowAddr.GetPortValue() != 8082 {
 		t.Errorf("expected port 8082 for shadow-service, got %d", shadowAddr.GetPortValue())
+	}
+}
+
+func TestMakeHTTPListenerAndRouteConfig(t *testing.T) {
+	routeCfg := makeRouteConfig("local_route")
+	if routeCfg == nil || routeCfg.Name != "local_route" {
+		t.Fatalf("makeRouteConfig failed, got %v", routeCfg)
+	}
+
+	l, err := makeHTTPListener("ingress_listener", 10000, "local_route")
+	if err != nil {
+		t.Fatalf("makeHTTPListener failed: %v", err)
+	}
+	if l.Name != "ingress_listener" {
+		t.Errorf("expected listener name ingress_listener, got %s", l.Name)
 	}
 }
