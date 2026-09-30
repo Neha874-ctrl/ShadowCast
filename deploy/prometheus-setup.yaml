@@ -64,4 +64,4 @@ data:
 
       - job_name: 'shadowcast-controller-local'
         static_configs:
-          - targets: ['host.minikube.internal:8080']
+          - targets: ['172.19.0.1:8082'] 
