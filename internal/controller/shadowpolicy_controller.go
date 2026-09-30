@@ -1,25 +1,7 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 
@@ -30,8 +12,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	trafficv1alpha1 "github.com/neha874-ctrl/shadowcast/api/v1alpha1"
+	shadowmetrics "github.com/neha874-ctrl/shadowcast/internal/metrics"
 	"github.com/neha874-ctrl/shadowcast/internal/xds"
 )
+
+const TargetNodeID = "shadowcast-envoy"
 
 // ShadowPolicyReconciler reconciles a ShadowPolicy object
 type ShadowPolicyReconciler struct {
@@ -51,10 +36,32 @@ func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	var policy trafficv1alpha1.ShadowPolicy
 	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("ShadowPolicy resource deleted", "name", req.NamespacedName)
+			logger.Info("ShadowPolicy resource deleted, clearing shadow configuration", "name", req.NamespacedName)
+
+			// Handle Policy Deletion: Fallback to default snapshot without shadow cluster
+			if r.SnapshotCache != nil {
+				fallbackSnapshot, err := xds.BuildFallbackSnapshot("deleted")
+				if err != nil {
+					logger.Error(err, "Failed to build fallback snapshot on deletion")
+					shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				if err := r.SnapshotCache.SetSnapshot(ctx, TargetNodeID, fallbackSnapshot); err != nil {
+					logger.Error(err, "Failed to clear xDS snapshot cache on deletion")
+					shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				logger.Info("Successfully applied fallback xDS snapshot to Envoy", "nodeID", TargetNodeID)
+				shadowmetrics.XDSSnapshotUpdates.Inc()
+			}
+
+			// Record deletion in metrics
+			shadowmetrics.ActivePolicies.Dec()
+			shadowmetrics.ReconcileTotal.WithLabelValues("success").Inc()
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch ShadowPolicy")
+		shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
 	}
 
@@ -62,38 +69,44 @@ func (r *ShadowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		"source", policy.Spec.SourceService,
 		"target", policy.Spec.TargetService,
 		"mirrorPercentage", policy.Spec.MirrorPercentage,
+		"resourceVersion", policy.ResourceVersion,
 	)
 
-	// Build Envoy xDS Snapshot
-	version := fmt.Sprintf("%d", time.Now().UnixNano())
-	snapshot, err := xds.BuildSnapshot(version, &policy)
+	// Build Envoy xDS Snapshot using ResourceVersion to avoid redundant updates
+	snapshot, err := xds.BuildSnapshot(policy.ResourceVersion, &policy)
 	if err != nil {
 		logger.Error(err, "Failed to build xDS snapshot")
+		shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
 	}
 
 	// Update xDS cache for Envoy node group "shadowcast-envoy"
-	// Update xDS cache for Envoy node group "shadowcast-envoy"
-	nodeID := "shadowcast-envoy"
 	if r.SnapshotCache != nil {
-		if err := r.SnapshotCache.SetSnapshot(ctx, nodeID, snapshot); err != nil {
+		if err := r.SnapshotCache.SetSnapshot(ctx, TargetNodeID, snapshot); err != nil {
 			logger.Error(err, "Failed to update xDS snapshot cache")
+			shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
 			return ctrl.Result{}, err
 		}
-		logger.Info("Successfully updated Envoy xDS snapshot", "nodeID", nodeID, "version", version)
+		logger.Info("Successfully updated Envoy xDS snapshot", "nodeID", TargetNodeID, "version", policy.ResourceVersion)
+		shadowmetrics.XDSSnapshotUpdates.Inc()
 	} else {
 		logger.Info("SnapshotCache is nil (running in test mode), skipping xDS cache update")
 	}
 
-	// Update CRD Status
+	// Update CRD Status if not already active
 	if !policy.Status.Active {
 		policy.Status.Active = true
 		if err := r.Status().Update(ctx, &policy); err != nil {
 			logger.Error(err, "Failed to update ShadowPolicy status")
+			shadowmetrics.ReconcileTotal.WithLabelValues("error").Inc()
 			return ctrl.Result{}, err
 		}
 		logger.Info("Updated ShadowPolicy status to Active", "name", policy.Name)
 	}
+
+	// Record successful reconciliation & active policy metric
+	shadowmetrics.ActivePolicies.Set(1)
+	shadowmetrics.ReconcileTotal.WithLabelValues("success").Inc()
 
 	return ctrl.Result{}, nil
 }

@@ -39,6 +39,19 @@ spec:
           spec:
             description: ShadowPolicySpec defines the desired state of ShadowPolicy
             properties:
+              headers:
+                items:
+                  properties:
+                    exact:
+                      type: string
+                    name:
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               ignoredFields:
                 items:
                   type: string

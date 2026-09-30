@@ -144,18 +144,34 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	// mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// 	Scheme:                 scheme,
+	// 	Metrics:                metricsServerOptions,
+	// 	WebhookServer:          webhookServer,
+	// 	HealthProbeBindAddress: probeAddr,
+	// 	LeaderElection:         enableLeaderElection,
+	// 	LeaderElectionID:       "99814771.shadowcast.io",
+	// })
+	// if err != nil {
+	// 	setupLog.Error(err, "Failed to start manager")
+	// 	os.Exit(1)
+	// }
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		WebhookServer:          webhookServer,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "99814771.shadowcast.io",
-	})
-	if err != nil {
-		setupLog.Error(err, "Failed to start manager")
-		os.Exit(1)
-	}
+        Scheme: scheme,
+        Metrics: metricsserver.Options{
+            BindAddress: metricsAddr,
+        },
+        WebhookServer:          webhookServer,
+        HealthProbeBindAddress: probeAddr,
+        LeaderElection:         enableLeaderElection,
+        LeaderElectionID:       "99814771.shadowcast.io",
+    })
+    if err != nil {
+        setupLog.Error(err, "Failed to start manager")
+        os.Exit(1)
+    }
+	
 
 	// Initialize Envoy xDS Snapshot Cache
 	snapshotCache := cachev3.NewSnapshotCache(false, cachev3.IDHash{}, nil)

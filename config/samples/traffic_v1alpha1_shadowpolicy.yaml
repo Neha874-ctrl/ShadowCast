@@ -1,9 +1,12 @@
 apiVersion: traffic.shadowcast.io/v1alpha1
 kind: ShadowPolicy
 metadata:
-  name: order-shadow-policy
+  name: shadowpolicy-sample
   namespace: default
 spec:
   sourceService: order-service
   targetService: shadow-service
   mirrorPercentage: 100
+  headers:
+    - name: "x-shadow-test"
+      exact: "true"

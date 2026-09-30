@@ -27,6 +27,13 @@ type ShadowPolicySpec struct {
 	TargetService    string   `json:"targetService"`
 	MirrorPercentage int32    `json:"mirrorPercentage"`
 	IgnoredFields    []string `json:"ignoredFields,omitempty"`
+	Headers          []HeaderMatch `json:"headers,omitempty"`
+}
+
+type HeaderMatch struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
+	Exact string `json:"exact,omitempty"`
 }
 
 // ShadowPolicyStatus defines the observed state of ShadowPolicy.
