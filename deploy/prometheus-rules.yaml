@@ -1,0 +1,40 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shadowcast-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: shadowcast.rules
+      rules:
+        # Alert: Shadowing Efficiency drops below 95%
+        - alert: ShadowTrafficDrift
+          expr: |
+            (
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[2m]))
+              /
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="order-service"}[2m]))
+            ) < 0.95
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Shadowing efficiency degraded"
+            description: "Shadow service is receiving less than 95% of mirrored primary traffic."
+
+        # Alert: Shadow service HTTP 5xx errors exceed 2%
+        - alert: ShadowServiceHighErrorRate
+          expr: |
+            (
+              sum(rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name="shadow-service", envoy_response_code_class="5"}[2m]))
+              /
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[2m]))
+            ) > 0.02
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate on shadow workload"
+            description: "Shadow service HTTP 5xx responses exceed 2% over 2 minutes."

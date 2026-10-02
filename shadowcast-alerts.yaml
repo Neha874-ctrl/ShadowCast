@@ -1,0 +1,38 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shadowcast-alerts
+  namespace: default
+spec:
+  groups:
+    - name: shadowcast.rules
+      rules:
+        # Alert when shadow request rate drops below 90% of primary request rate
+        - alert: ShadowTrafficDrift
+          expr: |
+            (
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[2m]))
+              /
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="order-service"}[2m]))
+            ) < 0.90
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Shadow traffic drop detected"
+            description: "Shadow service is receiving less than 90% of primary service traffic over the last 2 minutes."
+
+        # Alert when shadow service HTTP 5xx responses spike
+        - alert: ShadowServiceHighErrorRate
+          expr: |
+            (
+              sum(rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name="shadow-service", envoy_response_code_class="5"}[2m]))
+              /
+              sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[2m]))
+            ) > 0.05
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate on shadow-service"
+            description: "Shadow service 5xx response rate is above 5% over the last 2 minutes."
