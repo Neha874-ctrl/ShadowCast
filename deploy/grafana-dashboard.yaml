@@ -6,7 +6,7 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-  shadowcast-overview.json: |-
+  shadowcast-dashboard.json: |
     {
       "annotations": { "list": [] },
       "editable": true,
@@ -17,18 +17,56 @@ data:
       "liveNow": false,
       "panels": [
         {
-          "title": "Primary vs Shadow Request Rate (RPS)",
-          "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "title": "Shadow Traffic Ratio (Target: 0.50)",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "id": 1,
+          "pluginVersion": "10.0.0",
           "targets": [
             {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"shadow-service\"}[2m])) / sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"order-service\"}[2m]))",
+              "legendFormat": "Actual Ratio",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 0.4 },
+                  { "color": "green", "value": 0.48 },
+                  { "color": "yellow", "value": 0.55 },
+                  { "color": "red", "value": 0.65 }
+                ]
+              },
+              "unit": "percentunit"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "title": "Upstream Request Rate (RPS)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
+          "id": 2,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"order-service\"}[1m]))",
-              "legendFormat": "Primary (order-service)",
+              "legendFormat": "order-service (Primary)",
               "refId": "A"
             },
             {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"shadow-service\"}[1m]))",
-              "legendFormat": "Shadow (shadow-service)",
+              "legendFormat": "shadow-service (Shadow)",
               "refId": "B"
             }
           ],
@@ -40,35 +78,44 @@ data:
           }
         },
         {
-          "title": "Mirroring Ratio Efficiency",
-          "type": "gauge",
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "title": "Upstream HTTP 5xx Errors",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "id": 3,
           "targets": [
             {
-              "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"shadow-service\"}[2m])) / sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"order-service\"}[2m]))",
-              "legendFormat": "Ratio",
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(envoy_cluster_upstream_rq_xx{envoy_response_code_class=\"5\"}[1m])) by (envoy_cluster_name)",
+              "legendFormat": "{{envoy_cluster_name}}",
               "refId": "A"
             }
           ],
           "fieldConfig": {
-            "defaults": {
-              "min": 0,
-              "max": 1,
-              "unit": "percentunit",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "red", "value": null },
-                  { "color": "yellow", "value": 0.8 },
-                  { "color": "green", "value": 0.95 }
-                ]
-              }
+            "defaults": { "unit": "reqps" }
+          }
+        },
+        {
+          "title": "Envoy Downstream Active Connections",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "id": 4,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix=\"ingress_http\"}",
+              "legendFormat": "Active Connections",
+              "refId": "A"
             }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "none" }
           }
         }
       ],
-      "refresh": "5s",
       "schemaVersion": 38,
-      "title": "ShadowCast Traffic Mirroring Overview",
-      "uid": "shadowcast-overview"
+      "style": "dark",
+      "tags": ["shadowcast", "envoy", "kubernetes"],
+      "time": { "from": "now-15m", "to": "now" },
+      "title": "ShadowCast - Envoy Traffic Mirroring",
+      "uid": "shadowcast-traffic-mirroring"
     }
