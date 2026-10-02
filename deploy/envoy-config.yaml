@@ -51,7 +51,7 @@ data:
 
       clusters:
       - name: order-service
-        type: LOGICAL_DNS
+        type: STRICT_DNS
         dns_lookup_family: V4_ONLY
         lb_policy: ROUND_ROBIN
         load_assignment:
@@ -65,7 +65,7 @@ data:
                     port_value: 8080
 
       - name: shadow-service
-        type: LOGICAL_DNS
+        type: STRICT_DNS
         dns_lookup_family: V4_ONLY
         lb_policy: ROUND_ROBIN
         load_assignment:
