@@ -2,14 +2,14 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: envoy-stats
-  namespace: monitoring
+  namespace: default
   labels:
     release: prometheus
 spec:
   selector:
     matchLabels:
-      app: envoy-proxy  # Adjust label to match your Envoy proxy pod labels
+      app: envoy
   podMetricsEndpoints:
-    - port: admin       # Name of the Envoy admin port in container spec (or targetPort: 9901)
-      path: /stats/prometheus
-      interval: 10s
+  - port: admin
+    path: /stats/prometheus
+    interval: 10s
