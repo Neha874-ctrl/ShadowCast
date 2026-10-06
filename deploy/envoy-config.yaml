@@ -90,6 +90,15 @@ data:
             dns_resolver_options:
               use_tcp_for_dns_lookups: true
         lb_policy: ROUND_ROBIN
+        # --- CIRCUIT BREAKING & LOAD SHEDDING LIMITS ---
+        circuit_breakers:
+          thresholds:
+          - priority: DEFAULT
+            max_connections: 50         # Max concurrent TCP connections allowed
+            max_pending_requests: 20    # Max requests queued waiting for a connection
+            max_requests: 100           # Max concurrent outstanding active HTTP requests
+            max_retries: 1              # Limit active retries to prevent retry storms
+            track_remaining: true       # Expose remaining quota metrics to Prometheus
         load_assignment:
           cluster_name: shadow-service
           endpoints:
