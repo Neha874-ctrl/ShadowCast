@@ -7,18 +7,44 @@ metadata:
     release: prometheus
 spec:
   groups:
-    - name: shadowcast.rules
-      rules:
-        - alert: ShadowTrafficDrift
-          expr: |
-            (
-              (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[1m])) or vector(0))
-              / on()
-              (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="order-service"}[1m])) or vector(1))
-            ) < 0.90
-          for: 15s
-          labels:
-            severity: warning
-          annotations:
-            summary: "Shadow traffic drop detected"
-            description: "Shadow service is receiving less than 90% of primary traffic or is down."
+  - name: shadowcast.rules
+    rules:
+    # 1. Shadow Traffic Drift / Drop SLA Alert
+    - alert: ShadowTrafficDrift
+      expr: |
+        (
+          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[1m])) or vector(0))
+          / on()
+          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="order-service"}[1m])) or vector(1))
+        ) < 0.90
+      for: 15s
+      labels:
+        severity: warning
+      annotations:
+        summary: "Shadow traffic drop detected"
+        description: "Shadow service is receiving less than 90% of primary traffic or is down."
+
+    # 2. Shadow Service High 5xx Error Rate Alert
+    - alert: ShadowServiceHighErrorRate
+      expr: |
+        (
+          sum(rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name="shadow-service", envoy_response_code_class="5"}[1m]))
+          / on()
+          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[1m])) or vector(1))
+        ) > 0.05
+      for: 30s
+      labels:
+        severity: critical
+      annotations:
+        summary: "High error rate on shadow service"
+        description: "Shadow service 5xx response rate has exceeded 5% over the last minute."
+
+    # 3. Upstream Cluster Endpoint Unhealthy Alert
+    - alert: ShadowCastUpstreamUnhealthy
+      expr: envoy_cluster_membership_healthy{envoy_cluster_name=~"order-service|shadow-service"} == 0
+      for: 15s
+      labels:
+        severity: critical
+      annotations:
+        summary: "Envoy upstream endpoint unhealthy"
+        description: "Cluster {{ $labels.envoy_cluster_name }} has zero healthy endpoints in Envoy service discovery."
