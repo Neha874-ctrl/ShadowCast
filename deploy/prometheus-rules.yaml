@@ -9,11 +9,11 @@ spec:
   groups:
   - name: shadowcast.rules
     rules:
-    # 1. Shadow Traffic Drift / Drop SLA Alert
+    # 1. Shadow Traffic Drift Alert
     - alert: ShadowTrafficDrift
       expr: |
         (
-          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[1m])) or vector(0))
+          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="diferencia-service"}[1m])) or vector(0))
           / on()
           (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="order-service"}[1m])) or vector(1))
         ) < 0.90
@@ -22,15 +22,15 @@ spec:
         severity: warning
       annotations:
         summary: "Shadow traffic drop detected"
-        description: "Shadow service is receiving less than 90% of primary traffic or is down."
+        description: "Diferencia service is receiving less than 90% of primary traffic or is down."
 
     # 2. Shadow Service High 5xx Error Rate Alert
     - alert: ShadowServiceHighErrorRate
       expr: |
         (
-          sum(rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name="shadow-service", envoy_response_code_class="5"}[1m]))
+          sum(rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name="diferencia-service", envoy_response_code_class="5"}[1m]))
           / on()
-          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="shadow-service"}[1m])) or vector(1))
+          (sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="diferencia-service"}[1m])) or vector(1))
         ) > 0.05
       for: 30s
       labels:
@@ -41,10 +41,25 @@ spec:
 
     # 3. Upstream Cluster Endpoint Unhealthy Alert
     - alert: ShadowCastUpstreamUnhealthy
-      expr: envoy_cluster_membership_healthy{envoy_cluster_name=~"order-service|shadow-service"} == 0
+      expr: envoy_cluster_membership_healthy{envoy_cluster_name=~"order-service|diferencia-service"} == 0
       for: 15s
       labels:
         severity: critical
       annotations:
         summary: "Envoy upstream endpoint unhealthy"
         description: "Cluster {{ $labels.envoy_cluster_name }} has zero healthy endpoints in Envoy service discovery."
+
+    # 4. Response Payload Mismatch / Schema Drift Alert
+    - alert: ShadowPayloadMismatch
+      expr: |
+        (
+          rate(diferencia_mismatches_total[1m])
+          /
+          (rate(diferencia_requests_total[1m]) or vector(1))
+        ) > 0.02
+      for: 30s
+      labels:
+        severity: critical
+      annotations:
+        summary: "Shadow response payload drift detected"
+        description: "Over 2% of responses between primary and shadow services have payload/schema mismatches."

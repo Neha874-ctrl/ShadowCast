@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diferencia
+  namespace: default
+  labels:
+    app: diferencia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: diferencia
+  template:
+    metadata:
+      labels:
+        app: diferencia
+    spec:
+      containers:
+      - name: diferencia
+        image: python:3.9-slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install flask requests prometheus_client
+          cat << 'EOF' > app.py
+          import requests
+          from flask import Flask, request, jsonify
+          from prometheus_client import Counter, start_http_server
+
+          app = Flask(__name__)
+          REQ_TOTAL = Counter('diferencia_requests_total', 'Total requests handled')
+          MISMATCH_TOTAL = Counter('diferencia_mismatches_total', 'Total response mismatches')
+
+          PRIMARY_URL = "http://order-service.default.svc.cluster.local:8080"
+          CANDIDATE_URL = "http://shadow-service.default.svc.cluster.local:8080"
+
+          @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE'])
+          @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+          def proxy(path):
+              REQ_TOTAL.inc()
+              
+              # Forward clean GET/POST requests without Envoy host headers
+              try:
+                  p_res = requests.get(f"{PRIMARY_URL}/{path}", timeout=2)
+                  c_res = requests.get(f"{CANDIDATE_URL}/{path}", timeout=2)
+                  
+                  if p_res.status_code != c_res.status_code or p_res.text.strip() != c_res.text.strip():
+                      MISMATCH_TOTAL.inc()
+                      
+                  return (p_res.content, p_res.status_code)
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+
+          if __name__ == '__main__':
+              start_http_server(8060)
+              app.run(host='0.0.0.0', port=8080)
+          EOF
+          python app.py
+        ports:
+        - containerPort: 8080
+          name: proxy
+        - containerPort: 8060
+          name: metrics

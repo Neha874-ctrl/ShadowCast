@@ -36,7 +36,7 @@ data:
                     route:
                       cluster: order-service
                       request_mirror_policies:
-                      - cluster: shadow-service
+                      - cluster: diferencia-service
                         runtime_fraction:
                           default_value:
                             numerator: 100
@@ -75,7 +75,7 @@ data:
                     address: order-service.default.svc.cluster.local
                     port_value: 8080
 
-      - name: shadow-service
+      - name: diferencia-service
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
         dns_refresh_rate: 5s
@@ -90,21 +90,20 @@ data:
             dns_resolver_options:
               use_tcp_for_dns_lookups: true
         lb_policy: ROUND_ROBIN
-        # --- CIRCUIT BREAKING & LOAD SHEDDING LIMITS ---
         circuit_breakers:
           thresholds:
           - priority: DEFAULT
-            max_connections: 50         # Max concurrent TCP connections allowed
-            max_pending_requests: 20    # Max requests queued waiting for a connection
-            max_requests: 100           # Max concurrent outstanding active HTTP requests
-            max_retries: 1              # Limit active retries to prevent retry storms
-            track_remaining: true       # Expose remaining quota metrics to Prometheus
+            max_connections: 50
+            max_pending_requests: 20
+            max_requests: 100
+            max_retries: 1
+            track_remaining: true
         load_assignment:
-          cluster_name: shadow-service
+          cluster_name: diferencia-service
           endpoints:
           - lb_endpoints:
             - endpoint:
                 address:
                   socket_address:
-                    address: shadow-service.default.svc.cluster.local
+                    address: diferencia-service.default.svc.cluster.local
                     port_value: 8080

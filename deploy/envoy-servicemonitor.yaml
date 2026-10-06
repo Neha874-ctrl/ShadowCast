@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: envoy-servicemonitor
+  namespace: default
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: envoy-proxy  # Matches pod selector used by envoy-service
+  endpoints:
+  - port: admin
+    path: /stats/prometheus
+    interval: 5s

@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: diferencia-monitor
+  namespace: default
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: diferencia
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 5s
+    path: /metrics
