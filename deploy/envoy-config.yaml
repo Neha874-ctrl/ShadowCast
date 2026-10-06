@@ -39,7 +39,7 @@ data:
                       - cluster: shadow-service
                         runtime_fraction:
                           default_value:
-                            numerator: 50
+                            numerator: 100
                             denominator: HUNDRED
                     request_headers_to_remove:
                     - "authorization"
@@ -53,6 +53,17 @@ data:
       - name: order-service
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
+        dns_refresh_rate: 5s
+        typed_dns_resolver_config:
+          name: envoy.network.dns_resolver.cares
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+            resolvers:
+            - socket_address:
+                address: 10.96.0.10
+                port_value: 53
+            dns_resolver_options:
+              use_tcp_for_dns_lookups: true
         lb_policy: ROUND_ROBIN
         load_assignment:
           cluster_name: order-service
@@ -67,6 +78,17 @@ data:
       - name: shadow-service
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
+        dns_refresh_rate: 5s
+        typed_dns_resolver_config:
+          name: envoy.network.dns_resolver.cares
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+            resolvers:
+            - socket_address:
+                address: 10.96.0.10
+                port_value: 53
+            dns_resolver_options:
+              use_tcp_for_dns_lookups: true
         lb_policy: ROUND_ROBIN
         load_assignment:
           cluster_name: shadow-service
