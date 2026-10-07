@@ -1,0 +1,15 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["shadowcast"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "ShadowCast Dashboard", "uid": "shadowcast-dashboard"
+}

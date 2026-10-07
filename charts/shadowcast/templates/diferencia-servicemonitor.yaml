@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: diferencia-servicemonitor
+  namespace: default
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: diferencia
+  endpoints:
+  - port: metrics
+    interval: 5s
+    path: /metrics
