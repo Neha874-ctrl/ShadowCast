@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         app: envoy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9901"
+        prometheus.io/path: "/stats/prometheus"
     spec:
       containers:
       - name: envoy

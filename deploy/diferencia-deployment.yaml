@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diferencia
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: diferencia
+  template:
+    metadata:
+      labels:
+        app: diferencia
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8060"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: diferencia
+        # ... rest of your container spec
