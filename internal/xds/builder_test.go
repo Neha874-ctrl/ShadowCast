@@ -163,12 +163,24 @@ func TestBuildSnapshot_HostMode(t *testing.T) {
 }
 
 func TestMakeHTTPListenerAndRouteConfig(t *testing.T) {
-	routeCfg := makeRouteConfig("local_route")
+	policy := &trafficv1alpha1.ShadowPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-listener-policy",
+			Namespace: "test-ns",
+		},
+		Spec: trafficv1alpha1.ShadowPolicySpec{
+			SourceService:    "test-source-svc",
+			TargetService:    "test-target-svc",
+			MirrorPercentage: 50,
+		},
+	}
+
+	routeCfg := makeRouteConfig("local_route", policy)
 	if routeCfg == nil || routeCfg.Name != "local_route" {
 		t.Fatalf("makeRouteConfig failed, got %v", routeCfg)
 	}
 
-	l, err := makeHTTPListener("ingress_listener", 10000, "local_route")
+	l, err := makeHTTPListener("ingress_listener", 10000, routeCfg)
 	if err != nil {
 		t.Fatalf("makeHTTPListener failed: %v", err)
 	}

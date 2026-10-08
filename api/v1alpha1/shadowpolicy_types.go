@@ -23,10 +23,10 @@ import (
 
 // ShadowPolicySpec defines the desired state of ShadowPolicy
 type ShadowPolicySpec struct {
-	SourceService    string   `json:"sourceService"`
-	TargetService    string   `json:"targetService"`
-	MirrorPercentage int32    `json:"mirrorPercentage"`
-	IgnoredFields    []string `json:"ignoredFields,omitempty"`
+	SourceService    string        `json:"sourceService"`
+	TargetService    string        `json:"targetService"`
+	MirrorPercentage int32         `json:"mirrorPercentage"`
+	IgnoredFields    []string      `json:"ignoredFields,omitempty"`
 	Headers          []HeaderMatch `json:"headers,omitempty"`
 }
 

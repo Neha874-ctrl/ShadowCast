@@ -61,11 +61,7 @@ func makeCluster(name string, host string, port uint32, discoveryType cluster.Cl
 func makeRouteConfig(name string, policy *trafficv1alpha1.ShadowPolicy) *route.RouteConfiguration {
 	primaryCluster := policy.Spec.SourceService
 	shadowCluster := policy.Spec.TargetService
-	mirrorPercent := uint32(policy.Spec.MirrorPercentage)
-
-	if mirrorPercent > 100 {
-		mirrorPercent = 100
-	}
+	mirrorPercent := min(uint32(policy.Spec.MirrorPercentage), 100)
 
 	var mirrorPolicies []*route.RouteAction_RequestMirrorPolicy
 
@@ -95,7 +91,7 @@ func makeRouteConfig(name string, policy *trafficv1alpha1.ShadowPolicy) *route.R
 			headerMatchers = append(headerMatchers, &route.HeaderMatcher{
 				Name: h.Name,
 				HeaderMatchSpecifier: &route.HeaderMatcher_ExactMatch{
-					ExactMatch: matchValue,
+					ExactMatch: matchValue, //nolint:staticcheck
 				},
 			})
 		} else {
