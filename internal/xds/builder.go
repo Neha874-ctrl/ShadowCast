@@ -28,6 +28,7 @@ func makeCluster(name string, host string, port uint32, discoveryType cluster.Cl
 		Name:                 name,
 		ConnectTimeout:       durationpb.New(2 * 1000000000), // 2s
 		ClusterDiscoveryType: &cluster.Cluster_Type{Type: discoveryType},
+		DnsLookupFamily:      cluster.Cluster_V4_ONLY,
 		LbPolicy:             cluster.Cluster_ROUND_ROBIN,
 		LoadAssignment: &endpoint.ClusterLoadAssignment{
 			ClusterName: name,

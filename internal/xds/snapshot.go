@@ -2,6 +2,7 @@ package xds
 
 import (
 	"fmt"
+	"os"
 
 	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	types "github.com/envoyproxy/go-control-plane/pkg/cache/types"
@@ -13,11 +14,27 @@ import (
 
 // BuildSnapshot creates the xDS snapshot for active shadowing
 func BuildSnapshot(version string, policy *trafficv1alpha1.ShadowPolicy) (cachev3.ResourceSnapshot, error) {
-	sourceHost := fmt.Sprintf("%s.%s.svc.cluster.local", policy.Spec.SourceService, policy.Namespace)
-	targetHost := fmt.Sprintf("%s.%s.svc.cluster.local", policy.Spec.TargetService, policy.Namespace)
+	upstreamMode := os.Getenv("UPSTREAM_MODE")
 
-	primaryCluster := makeCluster(policy.Spec.SourceService, sourceHost, 8080, cluster.Cluster_LOGICAL_DNS)
-	shadowCluster := makeCluster(policy.Spec.TargetService, targetHost, 8080, cluster.Cluster_LOGICAL_DNS)
+	var discoveryType cluster.Cluster_DiscoveryType
+	var sourceHost, targetHost string
+	sourcePort, targetPort := uint32(8080), uint32(8080)
+
+	if upstreamMode == "host" {
+		hostGatewayIP := os.Getenv("HOST_GATEWAY_IP")
+		discoveryType = cluster.Cluster_STATIC
+		sourceHost = hostGatewayIP
+		targetHost = hostGatewayIP
+		sourcePort = 8081
+		targetPort = 8082
+	} else {
+		discoveryType = cluster.Cluster_LOGICAL_DNS
+		sourceHost = fmt.Sprintf("%s.%s.svc.cluster.local", policy.Spec.SourceService, policy.Namespace)
+		targetHost = fmt.Sprintf("%s.%s.svc.cluster.local", policy.Spec.TargetService, policy.Namespace)
+	}
+
+	primaryCluster := makeCluster(policy.Spec.SourceService, sourceHost, sourcePort, discoveryType)
+	shadowCluster := makeCluster(policy.Spec.TargetService, targetHost, targetPort, discoveryType)
 
 	routeConfig := makeRouteConfig("local_route", policy)
 
@@ -44,9 +61,20 @@ func BuildSnapshot(version string, policy *trafficv1alpha1.ShadowPolicy) (cachev
 
 // BuildFallbackSnapshot creates the xDS snapshot when policy is deleted
 func BuildFallbackSnapshot(version string) (cachev3.ResourceSnapshot, error) {
-	sourceHost := "order-service.default.svc.cluster.local"
+	upstreamMode := os.Getenv("UPSTREAM_MODE")
 
-	primaryCluster := makeCluster("order-service", sourceHost, 8080, cluster.Cluster_LOGICAL_DNS)
+	discoveryType := cluster.Cluster_LOGICAL_DNS
+	sourceHost := "order-service.default.svc.cluster.local"
+	var port uint32 = 8080
+
+	if upstreamMode == "host" {
+		hostGatewayIP := os.Getenv("HOST_GATEWAY_IP")
+		discoveryType = cluster.Cluster_STATIC
+		sourceHost = hostGatewayIP
+		port = 8081
+	}
+
+	primaryCluster := makeCluster("order-service", sourceHost, port, discoveryType)
 
 	routeConfig := makePrimaryOnlyRouteConfig("local_route", "order-service")
 
