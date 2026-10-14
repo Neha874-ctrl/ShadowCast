@@ -1,0 +1,10 @@
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = shadowcast-api-server
+DNS.2 = shadowcast-api-server.default
+DNS.3 = shadowcast-api-server.default.svc
+DNS.4 = shadowcast-api-server.default.svc.cluster.local

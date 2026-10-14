@@ -1,0 +1,16 @@
+{{- if .Values.apiServer.enabled }}
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1.shadowcast.io
+spec:
+  group: shadowcast.io
+  version: v1
+  service:
+    name: shadowcast-api-server
+    namespace: {{ .Release.Namespace }}
+    port: 443
+  groupPriorityMinimum: 1000
+  versionPriority: 100
+  caBundle: {{ .Values.apiServer.caBundle }}
+{{- end }}

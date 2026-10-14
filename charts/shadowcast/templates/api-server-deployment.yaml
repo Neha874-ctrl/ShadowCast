@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shadowcast-api-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shadowcast-api-server
+  template:
+    metadata:
+      labels:
+        app: shadowcast-api-server
+    spec:
+      containers:
+      - name: apiserver
+        image: shadowcast:latest
+        imagePullPolicy: Never
+        command: ["/shadowcast-api-server"]
+        args:
+        - --secure-port=8443
+        - --tls-cert-file=/var/run/shadowcast/tls/tls.crt
+        - --tls-private-key-file=/var/run/shadowcast/tls/tls.key
+        ports:
+        - containerPort: 8443
+          name: https
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /var/run/shadowcast/tls
+          readOnly: true
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: shadowcast-api-server-certs

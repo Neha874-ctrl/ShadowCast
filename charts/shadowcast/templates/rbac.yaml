@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shadowcast-controller-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shadowcast-controller-manager-role
+rules:
+  # Permissions for your custom resource
+  - apiGroups:
+      - traffic.shadowcast.io
+    resources:
+      - shadowpolicies
+      - shadowpolicies/status
+      - shadowpolicies/finalizers
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  # Additional permissions controller-runtime often needs for leader election/coordination
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - events
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shadowcast-controller-manager-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shadowcast-controller-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: shadowcast-controller-manager
+    namespace: {{ .Release.Namespace }}
