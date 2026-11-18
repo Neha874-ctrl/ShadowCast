@@ -1,0 +1,6 @@
+fastapi>=0.135.0,<0.165.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0,<3.0.0
+httpx>=0.27.2
+kubernetes>=31.0.0
+apscheduler>=3.10.4

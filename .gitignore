@@ -31,3 +31,6 @@ go.work
 apiserver
 shadowcast-api-server
 shadowcast-controller
+.venv/
+backend/data/
+*.egg-info/
