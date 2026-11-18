@@ -195,7 +195,7 @@ sequenceDiagram
 | **Differential Engine**| **`diferencia` Service** | Inline comparator for HTTP status codes, latency differentials, and payload byte mismatches. | Purpose-built microservice exposing Prometheus metrics (`diferencia_requests_total`, `diferencia_mismatches_total`). |
 | **K8s Controller** | **Go Controller-Runtime** | Custom Kubernetes operator reconciling the `ShadowPolicy` CRD (`traffic.shadowcast.io/v1alpha1`). | Native Kubernetes reconciler patterns, leader election, and high-efficiency xDS gRPC snapshot caching. |
 | **K8s Client SDK** | **Kubernetes Python SDK** | FastAPI background bridge to query Pod lifecycle status, cAdvisor metrics, and patch ConfigMaps/CRDs. | Enables Python-based control plane to trigger Kubernetes actions without shell execs. |
-| **Async Watchdog** | **`HTTPX` + `APScheduler`** | `HTTPX` for async pre-flight health probes; `APScheduler` for 5s periodic circuit-breaker evaluation. | Non-blocking async I/O; clean cron-like job execution decoupled from HTTP request cycles. |
+| **Async Watchdog** | **`HTTPX` + `APScheduler`** | `HTTPX` for async pre-flight health probes; `APScheduler` for 5s periodic circuit-breaker evaluation and automated SurrealDB anomaly retention cleanup (`DELETE anomaly_log WHERE timestamp < time::now() - 7d`). | Non-blocking async I/O; clean cron-like job execution decoupled from HTTP request cycles. |
 | **Observability** | **Prometheus + cAdvisor** | Time-series metrics engine scraping Envoy clusters, Difference stats, and container CPU/RAM. | Industry-standard PromQL support; pre-configured `PrometheusRule` alerting manifests. |
 
 ---
@@ -420,7 +420,10 @@ ShadowCast tracks candidate readiness across **5 core dimensions**:
 * If a session is deleted, the operator must immediately push a fallback snapshot directing $100\%$ of traffic to Primary with zero mirroring.
 
 ### 9.5 NFR-05: Storage Hygiene & Data Retention
-* Anomaly records and metrics in SurrealDB must carry a default Time-To-Live (TTL) of 7 days to prevent cluster storage exhaustion.
+* Anomaly records and metrics in SurrealDB are retained for 7 days to prevent cluster storage exhaustion. Because SurrealQL does not natively auto-delete rows via a table-level TTL keyword, data retention is enforced by the background `APScheduler` watchdog running a periodic cleanup task:
+  ```sql
+  DELETE anomaly_log WHERE timestamp < time::now() - 7d;
+  ```
 * Raw mirrored request bodies are never persisted to disk; only URL paths, headers, timing metadata, and error snippets are recorded.
 
 ---
@@ -615,7 +618,10 @@ DEFINE TABLE targets_to SCHEMAFULL;
 DEFINE FIELD in ON TABLE targets_to TYPE record(session);
 DEFINE FIELD out ON TABLE targets_to TYPE string; -- Service Name
 
--- 4. Anomaly Log Table (Auto-expiring via TTL)
+-- 4. Anomaly Log Table
+-- Note: As SurrealQL does not natively support an auto-expiring TTL keyword,
+-- retention cleanup is executed periodically by the APScheduler watchdog:
+-- DELETE anomaly_log WHERE timestamp < time::now() - 7d;
 DEFINE TABLE anomaly_log SCHEMAFULL;
 DEFINE FIELD session ON TABLE anomaly_log TYPE record(session);
 DEFINE FIELD timestamp ON TABLE anomaly_log TYPE datetime DEFAULT time::now();
@@ -664,7 +670,7 @@ await db.live('session', (action, result) => {
 | Test Phase | Verification Scope | Success Criteria |
 | :--- | :--- | :--- |
 | **Unit Testing** | Pydantic validation, SSRF checks, Apdex calculation, xDS builder snapshot generator. | $100\%$ pass on `make test` and `pytest`. All RFC 1918 / AWS metadata IPs blocked. |
-| **Controller Integration** | Go controller reconciling `ShadowPolicy` CRD against test Kubernetes API (`envtest`). | Dynamic xDS snapshot successfully constructed; `ActivePolicies` gauge increments. |
+| **Controller Integration** | Go controller reconciling `ShadowPolicy` CRD against test Kubernetes API (`envtest`). | Dynamic xDS snapshot successfully constructed; `shadowcast_active_policies_total` (`ActivePolicies` / `shadowcast_active_policies`) gauge increments. |
 | **Data Plane E2E** | Local Kind cluster running Envoy, Differencia, `order-service`, and `shadow-service`. | Live requests to port `10001` mirror to `shadow-service` at configured fraction. Primary receives $200$ OK with $< 2\text{ms}$ delta. |
 | **Circuit Breaker Test** | Inject deliberate $500$ errors into `shadow-service` at $> 20\%$ rate. | `APScheduler` detects spike within $5\text{s}$; `mirrorPercentage` patched to $0$; alert published to UI. |
 | **UI Streaming E2E** | React UI receiving WebSocket updates from SurrealDB. | Anomaly records populate table in View 4 within $< 200\text{ms}$ of occurrence. |
