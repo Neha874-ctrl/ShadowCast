@@ -9,47 +9,18 @@ kind: ClusterRole
 metadata:
   name: shadowcast-controller-manager-role
 rules:
-  # Permissions for your custom resource
-  - apiGroups:
-      - traffic.shadowcast.io
+  - apiGroups: ["traffic.shadowcast.io"]
     resources:
       - shadowpolicies
       - shadowpolicies/status
       - shadowpolicies/finalizers
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  # Additional permissions controller-runtime often needs for leader election/coordination
-  - apiGroups:
-      - ""
-    resources:
-      - configmaps
-      - events
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - coordination.k8s.io
-    resources:
-      - leases
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "events"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

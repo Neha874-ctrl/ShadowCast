@@ -1,24 +1,27 @@
-ARG BASE_IMAGE=golang:1.26
-FROM ${BASE_IMAGE} AS builder
-ARG TARGETOS
-ARG TARGETARCH
-
+# Build stage using Go 1.23
+FROM golang:1.23 AS builder
 WORKDIR /workspace
 
-COPY go.mod go.sum ./
+# Allow Go to automatically download required toolchains if go.mod requires a newer version
+ENV GOTOOLCHAIN=auto
+
+# Copy go.mod and go.sum
+COPY go.mod go.mod
+COPY go.sum go.sum
 RUN go mod download
 
-COPY . .
+# Copy source code
+COPY cmd/ cmd/
+COPY api/ api/
+COPY internal/ internal/
 
-# Build Controller Manager Binary from cmd/main.go
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o shadowcast-controller ./cmd
+# Build Controller Manager Binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager ./cmd/main.go
 
-# Build Aggregated API Server Binary from cmd/apiserver/main.go
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o shadowcast-api-server ./cmd/apiserver
-
-# Use distroless static base
+# Final stage
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/shadowcast-controller .
-COPY --from=builder /workspace/shadowcast-api-server .
+COPY --from=builder /workspace/manager /manager
 USER 65532:65532
+
+ENTRYPOINT ["/manager"]
