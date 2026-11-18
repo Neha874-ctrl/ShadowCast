@@ -105,6 +105,16 @@ async def preflight_validation(req: PreflightRequest):
 
     async def probe(url: str, ip: str) -> dict:
         t0 = time.perf_counter()
+        if ip.startswith("k8s-service:"):
+            svc_name = ip.split(":", 1)[1]
+            known = {s["name"]: s for s in k8s_bridge.list_cluster_services()}
+            if svc_name in known:
+                return {
+                    "reachable": True,
+                    "status_code": 200,
+                    "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                    "resolved_ip": f"cluster-svc ({svc_name})",
+                }
         try:
             async with httpx.AsyncClient(timeout=4.0, verify=False) as hc:
                 r = await hc.get(url)

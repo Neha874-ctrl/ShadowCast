@@ -3,9 +3,11 @@ import socket
 from urllib.parse import urlparse
 from fastapi import Header, HTTPException, status
 from .config import API_TOKEN
+from .k8s_bridge import k8s_bridge
 
 BLOCKED_HOSTS = {
     "kubernetes.default.svc",
+    "kubernetes.default.svc.cluster.local",
     "kubernetes.default",
     "localhost",
     "metadata.google.internal",
@@ -27,11 +29,19 @@ def verify_bearer_token(authorization: str = Header(default="")) -> str:
 
 def validate_url_ssrf(raw_url: str) -> str:
     parsed = urlparse(raw_url)
-    hostname = parsed.hostname
+    hostname = (parsed.hostname or "").lower()
     if not hostname:
         raise HTTPException(status_code=422, detail="Invalid URL: missing hostname.")
-    if hostname.lower() in BLOCKED_HOSTS:
+    if hostname in BLOCKED_HOSTS:
         raise HTTPException(status_code=422, detail=f"Security Violation: Host '{hostname}' is restricted.")
+
+    # Allow verified Kubernetes cluster services when backend runs outside cluster DNS (e.g. EC2/local host)
+    if hostname.endswith(".svc.cluster.local") or hostname.endswith(".svc"):
+        svc_name = hostname.split(".")[0]
+        known_services = {s["name"] for s in k8s_bridge.list_cluster_services()}
+        if svc_name in known_services:
+            return f"k8s-service:{svc_name}"
+        raise HTTPException(status_code=422, detail=f"Kubernetes service '{svc_name}' not found in cluster.")
 
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
