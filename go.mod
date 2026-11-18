@@ -1,6 +1,6 @@
 module github.com/neha874-ctrl/shadowcast
 
-go 1.22
+go 1.26.0
 
 require (
 	github.com/envoyproxy/go-control-plane v0.14.0
